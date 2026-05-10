@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevLaunch — Il tuo progetto, in produzione</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav__logo">DevLaunch<span class="dot">.</span></div>
+    <ul class="nav__links">
+      <li><a href="#servizi">Servizi</a></li>
+      <li><a href="#come-funziona">Come funziona</a></li>
+      <li><a href="#contatti">Contatti</a></li>
+    </ul>
+    <a href="#contatti" class="btn btn--sm">Inizia ora →</a>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero__tag">🐳 Containerizzato con Docker</div>
+    <h1 class="hero__title">
+      Il tuo progetto<br>
+      <em>in produzione</em><br>
+      in meno di un'ora.
+    </h1>
+    <p class="hero__sub">
+      Costruiamo, containerizziamo e deployiamo la tua app con le best practice DevOps.<br>
+      Veloce, sicuro, scalabile.
+    </p>
+    <div class="hero__cta">
+      <a href="#contatti" class="btn btn--primary">Parliamone →</a>
+      <a href="#come-funziona" class="btn btn--ghost">Scopri come</a>
+    </div>
+    <div class="hero__badge-row">
+      <span class="badge">⚡ Node.js 20</span>
+      <span class="badge">🐳 Docker</span>
+      <span class="badge">☸️ Kubernetes</span>
+      <span class="badge">🔄 CI/CD</span>
+    </div>
+  </section>
+
+  <!-- STATS BAR -->
+  <div class="statsbar">
+    <div class="statsbar__item"><strong>99.9%</strong><span>Uptime garantito</span></div>
+    <div class="statsbar__divider"></div>
+    <div class="statsbar__item"><strong>&lt; 200ms</strong><span>Latenza media</span></div>
+    <div class="statsbar__divider"></div>
+    <div class="statsbar__item"><strong>0</strong><span>Downtime nei deploy</span></div>
+    <div class="statsbar__divider"></div>
+    <div class="statsbar__item"><strong>∞</strong><span>Scalabilità automatica</span></div>
+  </div>
+
+  <!-- SERVIZI -->
+  <section class="section" id="servizi">
+    <div class="section__header">
+      <span class="section__label">— Servizi</span>
+      <h2>Tutto quello che ti serve<br>per andare live.</h2>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="card__icon">🐳</div>
+        <h3>Containerizzazione</h3>
+        <p>Dockerfile ottimizzati, multi-stage build, immagini leggere e sicure pronte per la produzione.</p>
+        <ul class="card__list">
+          <li>Multi-stage build</li>
+          <li>Utente non-root</li>
+          <li>Health check integrato</li>
+        </ul>
+      </div>
+      <div class="card card--highlight">
+        <div class="card__icon">🔄</div>
+        <h3>CI/CD Pipeline</h3>
+        <p>Ogni push diventa un deploy automatico. Test, build, sicurezza e rilascio senza interventi manuali.</p>
+        <ul class="card__list">
+          <li>GitHub Actions</li>
+          <li>Test automatici</li>
+          <li>Scansione sicurezza</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card__icon">☸️</div>
+        <h3>Orchestrazione K8s</h3>
+        <p>Deploy su Kubernetes con scaling automatico, zero downtime e rollback istantaneo.</p>
+        <ul class="card__list">
+          <li>HPA autoscaling</li>
+          <li>Rolling updates</li>
+          <li>Monitoring integrato</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- COME FUNZIONA -->
+  <section class="section section--dark" id="come-funziona">
+    <div class="section__header">
+      <span class="section__label">— Come funziona</span>
+      <h2>Tre passi verso<br>la produzione.</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step__num">01</div>
+        <div class="step__content">
+          <h3>Scrivi il codice</h3>
+          <p>Sviluppi la tua app Node.js normalmente. Noi definiamo la struttura, le best practice e il Dockerfile fin dall'inizio.</p>
+        </div>
+      </div>
+      <div class="step__arrow">→</div>
+      <div class="step">
+        <div class="step__num">02</div>
+        <div class="step__content">
+          <h3>Push su GitHub</h3>
+          <p>Un semplice <code>git push</code> attiva la pipeline: lint, test, build Docker, scansione sicurezza, tutto automatico.</p>
+        </div>
+      </div>
+      <div class="step__arrow">→</div>
+      <div class="step">
+        <div class="step__num">03</div>
+        <div class="step__content">
+          <h3>Sei in produzione</h3>
+          <p>L'app è live su Kubernetes. Kubernetes gestisce lo scaling, il monitoring avvisa in caso di problemi.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TECH STACK -->
+  <section class="section" id="stack">
+    <div class="section__header">
+      <span class="section__label">— Stack tecnologico</span>
+      <h2>Tools usati in questo<br>stesso progetto.</h2>
+    </div>
+    <div class="techgrid">
+      <div class="tech"><span>Node.js 20</span></div>
+      <div class="tech"><span>Express</span></div>
+      <div class="tech"><span>Docker</span></div>
+      <div class="tech"><span>Docker Compose</span></div>
+      <div class="tech"><span>Kubernetes</span></div>
+      <div class="tech"><span>GitHub Actions</span></div>
+      <div class="tech"><span>Prometheus</span></div>
+      <div class="tech"><span>Grafana</span></div>
+      <div class="tech"><span>Trivy</span></div>
+      <div class="tech"><span>Helmet.js</span></div>
+      <div class="tech"><span>Winston</span></div>
+      <div class="tech"><span>Jest</span></div>
+    </div>
+  </section>
+
+  <!-- CONTATTI -->
+  <section class="section section--contact" id="contatti">
+    <div class="contact__layout">
+      <div class="contact__left">
+        <span class="section__label">— Contatti</span>
+        <h2>Pronti a<br>partire?</h2>
+        <p>Scrivici, ti rispondiamo entro 24 ore con una proposta su misura.</p>
+        <div class="contact__info">
+          <span>📧 hello@devlaunch.io</span>
+          <span>📍 Milano, Italia</span>
+        </div>
+      </div>
+      <div class="contact__right">
+        <form class="form" id="contactForm">
+          <div class="form__group">
+            <label>Nome</label>
+            <input type="text" id="name" placeholder="Mario Rossi" required>
+          </div>
+          <div class="form__group">
+            <label>Email</label>
+            <input type="email" id="email" placeholder="mario@example.com" required>
+          </div>
+          <div class="form__group">
+            <label>Messaggio</label>
+            <textarea id="message" rows="4" placeholder="Parlami del tuo progetto..." required></textarea>
+          </div>
+          <button type="submit" class="btn btn--primary btn--full" id="submitBtn">
+            Invia messaggio →
+          </button>
+          <div class="form__feedback" id="formFeedback"></div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer__left">
+      <span class="nav__logo">DevLaunch<span class="dot">.</span></span>
+      <span>Progetto base DevOps — Node.js + Docker</span>
+    </div>
+    <div class="footer__right">
+      <a href="https://github.com" target="_blank">GitHub</a>
+      <a href="/health" target="_blank">Health check</a>
+    </div>
+  </footer>
+
+  <script src="/js/main.js"></script>
+</body>
+</html>

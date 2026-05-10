@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      target: tester        # usa lo stage con dev deps per hot reload
+    command: npm run dev
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+    volumes:
+      - ./src:/app/src      # hot reload — le modifiche sono immediate
+      - /app/node_modules
+    restart: unless-stopped
