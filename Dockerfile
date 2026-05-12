@@ -27,7 +27,6 @@ COPY --chown=appuser:nodejs package.json ./
 USER appuser
 EXPOSE 3000
 
-# Health check corretto per puntare alla root
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost:3000/ || exit 1
 
