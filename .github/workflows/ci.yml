@@ -3,9 +3,6 @@ name: ci-cd
 on:
   push:
     branches: [main]
-    tags: ['v*.*.*']
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 env:
@@ -13,20 +10,14 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-# ─────────────────────────────────────────────────────────────────────────────
-# JOB 1 — Build & Push
-# ─────────────────────────────────────────────────────────────────────────────
   build:
     name: Build & Push
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write
-      id-token: write
-      attestations: write
     outputs:
-      image-digest: ${{ steps.push.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,13 +26,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
-      - name: Build Next.js
-        run: npm run build
+      # Corretto: npm test invece di npm run build
+      - name: Run Tests
+        run: npm test
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -58,31 +49,19 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+          tags: type=sha,prefix=sha-
 
       - name: Build & Push Docker image
-        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# JOB 2 — Deploy su Kubernetes tramite Tailscale
-# ─────────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to Kubernetes
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'staging' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -90,83 +69,36 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-
-      # ── Connessione sicura tramite Tailscale ──────────────────────────────
       - name: Connect to Tailscale
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
           tags: tag:github-actions
 
-      # ── Kubeconfig con IP Tailscale della VM ──────────────────────────────
       - name: Configure kubeconfig
         run: |
           mkdir -p $HOME/.kube
           echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
-      - name: Test cluster connection
-        run: kubectl get nodes
-
-      - name: Set environment
-        id: env
+      # Crea secret per scaricare immagine da GHCR
+      - name: Create Registry Secret
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "namespace=production" >> $GITHUB_OUTPUT
-            echo "values=helm/myapp/values-production.yaml" >> $GITHUB_OUTPUT
-          else
-            echo "namespace=staging" >> $GITHUB_OUTPUT
-            echo "values=helm/myapp/values-staging.yaml" >> $GITHUB_OUTPUT
-          fi
-
-      # ── Crea namespace e secret per scaricare l'immagine da GHCR ──────────
-      - name: Create namespace and image pull secret
-        run: |
-          kubectl create namespace ${{ steps.env.outputs.namespace }} \
-            --dry-run=client -o yaml | kubectl apply -f -
-
+          kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret docker-registry ghcr-pull-secret \
             --docker-server=ghcr.io \
             --docker-username=${{ github.actor }} \
             --docker-password=${{ secrets.GITHUB_TOKEN }} \
-            --namespace ${{ steps.env.outputs.namespace }} \
+            --namespace staging \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      # ── Deploy Helm ────────────────────────────────────────────────────────
-      - name: Helm upgrade / install
+      # Sostituisce l'immagine nei file K8s e applica
+      - name: Deploy with Kustomize/Kubectl
         run: |
-          helm upgrade --install nextjs-app ./helm/myapp \
-            --namespace ${{ steps.env.outputs.namespace }} \
-            --values ${{ steps.env.outputs.values }} \
-            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
-            --set image.tag=sha-${{ github.sha }} \
-            --atomic \
-            --timeout 5m \
-            --wait
+          # Aggiorna l'immagine nel tuo file deployment
+          sed -i "s|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image-tag }}|g" k8s/deployment.yaml
+          
+          # Applica i file nella tua cartella k8s
+          kubectl apply -f k8s/ -n staging
 
-      - name: Verify rollout
-        run: |
-          kubectl rollout status deployment/nextjs-app \
-            -n ${{ steps.env.outputs.namespace }} \
-            --timeout=3m
-
-      # ── Mostra la porta sulla quale è raggiungibile la webapp ─────────────
-      - name: Show app URL
-        run: |
-          echo ""
-          echo "✅ Deploy completato!"
-          NODE_PORT=$(kubectl get svc nextjs-app \
-            -n ${{ steps.env.outputs.namespace }} \
-            -o jsonpath='{.spec.ports[0].nodePort}')
-          TAILSCALE_IP=$(echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d | grep server | awk -F/ '{print $3}' | cut -d: -f1)
-          echo "🌐 App raggiungibile su: http://${TAILSCALE_IP}:${NODE_PORT}"
-          echo ""
-
-      - name: Rollback on failure
-        if: failure()
-        run: |
-          helm rollback nextjs-app 0 \
-            --namespace ${{ steps.env.outputs.namespace }} \
-            --wait
+          kubectl rollout status deployment/landing-page -n staging --timeout=3m
