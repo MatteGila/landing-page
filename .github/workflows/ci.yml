@@ -99,19 +99,19 @@ jobs:
             --namespace staging \
             --dry-run=client -o yaml | kubectl apply -f -
 
-              - name: Update Kubernetes manifests and Deploy
-              run: |
-                # 1. Converte l'IMAGE_NAME in tutto minuscolo per rispettare le regole Docker
-                LOWERCASE_IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-                
-                # 2. Sostituisce l'immagine nel deployment.yml
-                sed -i "s|image: .*|image: ${LOWERCASE_IMAGE}:sha-${{ github.sha }}|g" k8s/deployment.yml
-                
-                # 3. Applica al cluster
-                kubectl apply -f k8s/deployment.yml -n staging
-                
-                # 4. Aspetta che i pod partano
-                kubectl rollout status deployment/landing-app -n staging --timeout=3m
+      - name: Update Kubernetes manifests and Deploy
+        run: |
+          # 1. Converte l'IMAGE_NAME in tutto minuscolo per rispettare le regole Docker
+          LOWERCASE_IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+          
+          # 2. Sostituisce l'immagine nel deployment.yml
+          sed -i "s|image: .*|image: ${LOWERCASE_IMAGE}:sha-${{ github.sha }}|g" k8s/deployment.yml
+          
+          # 3. Applica al cluster
+          kubectl apply -f k8s/deployment.yml -n staging
+          
+          # 4. Aspetta che i pod partano
+          kubectl rollout status deployment/landing-app -n staging --timeout=3m
 
       - name: Show app URL
         run: |
