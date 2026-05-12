@@ -1,0 +1,62 @@
+---
+# Deployment — gestisce i Pod della tua app
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: landing-app
+  labels:
+    app: landing-app
+spec:
+  replicas: 2                        # 2 istanze dell'app
+  selector:
+    matchLabels:
+      app: landing-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                    # crea 1 pod nuovo prima di abbattere il vecchio
+      maxUnavailable: 0              # zero downtime
+  template:
+    metadata:
+      labels:
+        app: landing-app
+    spec:
+      containers:
+      - name: landing-app
+        image: landing-app:local
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "300m"
+        livenessProbe:               # K8s riavvia il container se non risponde
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:              # K8s manda traffico solo quando è pronto
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+---
+# Service — espone i Pod all'interno del cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: landing-app
+spec:
+  selector:
+    app: landing-app
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: NodePort                     # NodePort = accessibile dall'esterno con minikube
