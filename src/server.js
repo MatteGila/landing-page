@@ -53,7 +53,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server in ascolto su http://localhost:${PORT}`);
   console.log(`   Ambiente: ${process.env.NODE_ENV || 'development'}`);
 });
-pp.get('/health', (req, res) => {
+app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 // Graceful shutdown (importante per Docker/K8s)
