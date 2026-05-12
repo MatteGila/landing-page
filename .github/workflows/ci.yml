@@ -1,25 +1,18 @@
+name: ci-cd
+
 on:
   push:
     branches: [main]
-    tags: ['v*.*.*']
-  pull_request:
-    branches: [main]
   workflow_dispatch:
-
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
-
 jobs:
-# ─────────────────────────────────────────────────────────────────────────────
-# JOB 1 — Test
-# ─────────────────────────────────────────────────────────────────────────────
   test:
     name: Lint & Test
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -29,39 +22,27 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-
       - name: Install dependencies
         run: npm ci
 
       - name: Run tests
-      
         run: npm test -- --passWithNoTests
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# JOB 2 — Build & Push immagine Docker
-# ─────────────────────────────────────────────────────────────────────────────
   build:
     name: Build & Push
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write
-      id-token: write
-      attestations: write
     outputs:
       image-digest: ${{ steps.push.outputs.digest }}
-
 
     steps:
       - uses: actions/checkout@v4
 
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -70,52 +51,30 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
-
+          tags: type=sha,prefix=sha-
 
       - name: Build & Push
-        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# JOB 3 — Deploy su Kubernetes tramite Tailscale
-# ─────────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to Kubernetes
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'staging' }}
-
 
     steps:
       - uses: actions/checkout@v4
 
-
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
-
-
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-
 
       - name: Connect to Tailscale
         uses: tailscale/github-action@v2
@@ -123,35 +82,37 @@ jobs:
           authkey: ${{ secrets.TS_AUTHKEY }}
           tags: tag:github-actions
 
-
       - name: Configure kubeconfig
         run: |
           mkdir -p $HOME/.kube
           echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
-
-      - name: Test cluster connection
+      - name: Create namespace and Registry Secret
         run: |
-          kubectl get nodes
-          kubectl cluster-info
+          kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl create secret docker-registry ghcr-pull-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --namespace staging \
+            --dry-run=client -o yaml | kubectl apply -f -
 
-
-      - name: Set environment
-        id: env
+      - name: Update Kubernetes manifests and Deploy
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "namespace=production" >> $GITHUB_OUTPUT
-            echo "values=helm/myapp/values-production.yaml" >> $GITHUB_OUTPUT
-          else
-            echo "namespace=staging" >> $GITHUB_OUTPUT
-            echo "values=helm/myapp/values-staging.yaml" >> $GITHUB_OUTPUT
-          fi
+          # Aggiorna il nome immagine nel file YAML
+          sed -i "s|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}|g" k8s/deployment.yml
+          
+          # Applica al cluster
+          kubectl apply -f k8s/deployment.yml -n staging
+          
+          # Aspetta che l'app sia avviata
+          kubectl rollout status deployment/landing-app -n staging --timeout=3m
 
-
-      - name: Sync app secrets to K8s
+      - name: Show app URL
         run: |
-          kubectl create namespace ${{ steps.env.outputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
-
-
-          kubectl
+          echo "✅ Deploy completato con successo!"
+          NODE_PORT=$(kubectl get svc landing-app -n staging -o jsonpath='{.spec.ports[0].nodePort}')
+          TAILSCALE_IP=$(echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d | grep server | awk -F/ '{print $3}' | cut -d: -f1)
+          echo "🌐 La tua Landing Page è visibile qui: http://${TAILSCALE_IP}:${NODE_PORT}"
