@@ -91,7 +91,7 @@ jobs:
 
       - name: Update and Deploy
         run: |
-          LOWERCASE_IMAGE=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          LOWERCASE_IMAGE=$(echo "ghcr.io/mattegila/landing-page" | tr '[:upper:]' '[:lower:]')
           
           # Applica i manifesti YAML
           kubectl apply -f k8s/deployment.yml -n staging
