@@ -1,6 +1,3 @@
-name: ci-cd
-
-
 on:
   push:
     branches: [main]
@@ -17,19 +14,24 @@ env:
 
 jobs:
 # ─────────────────────────────────────────────────────────────────────────────
-# JOB 1 — Test & Build
+# JOB 1 — Test
 # ─────────────────────────────────────────────────────────────────────────────
-  build:
-    name: Build & Push
+  test:
+    name: Lint & Test
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    outputs:
-      image-digest: ${{ steps.push.outputs.digest }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U testuser"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
 
     steps:
@@ -47,9 +49,33 @@ jobs:
         run: npm ci
 
 
-      # Fallisce la build se non compila (sostituisce il vecchio test)
-      - name: Build Next.js
-        run: npm run build
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
+          NODE_ENV: test
+        run: npm test -- --passWithNoTests
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 2 — Build & Push immagine Docker
+# ─────────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build & Push
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      image-digest: ${{ steps.push.outputs.digest }}
+
+
+    steps:
+      - uses: actions/checkout@v4
 
 
       - name: Set up Docker Buildx
@@ -75,7 +101,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
 
-      - name: Build & Push Docker image
+      - name: Build & Push
         id: push
         uses: docker/build-push-action@v6
         with:
@@ -88,7 +114,7 @@ jobs:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# JOB 2 — Deploy su Kubernetes tramite Tailscale
+# JOB 3 — Deploy su Kubernetes tramite Tailscale
 # ─────────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to Kubernetes
@@ -124,6 +150,12 @@ jobs:
           chmod 600 $HOME/.kube/config
 
 
+      - name: Test cluster connection
+        run: |
+          kubectl get nodes
+          kubectl cluster-info
+
+
       - name: Set environment
         id: env
         run: |
@@ -136,34 +168,9 @@ jobs:
           fi
 
 
-      # Ora crea SOLO il secret per scaricare l'immagine Docker da GHCR
-      - name: Sync Image Pull Secret
+      - name: Sync app secrets to K8s
         run: |
           kubectl create namespace ${{ steps.env.outputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
 
 
-          kubectl create secret docker-registry ghcr-pull-secret \
-            --docker-server=ghcr.io \
-            --docker-username=${{ github.actor }} \
-            --docker-password=${{ secrets.GITHUB_TOKEN }} \
-            --namespace ${{ steps.env.outputs.namespace }} \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-
-      - name: Helm upgrade / install
-        run: |
-          helm upgrade --install nextjs-app ./helm/myapp \
-            --namespace ${{ steps.env.outputs.namespace }} \
-            --values ${{ steps.env.outputs.values }} \
-            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
-            --set image.tag=sha-${{ github.sha }} \
-            --atomic \
-            --timeout 5m \
-            --wait
-
-
-      - name: Verify rollout
-        run: |
-          kubectl rollout status deployment/nextjs-app \
-            -n ${{ steps.env.outputs.namespace }} \
-            --timeout=3m trovami l'errore nella build
+          kubectl
