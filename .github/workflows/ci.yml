@@ -35,9 +35,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    outputs:
-      image-digest: ${{ steps.push.outputs.digest }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -47,29 +44,21 @@ jobs:
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: type=sha,prefix=sha-
 
       - name: Build & Push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ghcr.io/${{ github.repository }}:latest
 
   deploy:
     name: Deploy to Kubernetes
     needs: build
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -88,34 +77,39 @@ jobs:
           echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
-      - name: Create namespace and Registry Secret
+      - name: Setup Namespace and Secret
         run: |
-          kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+          kubectl get namespace staging || kubectl create namespace staging
           
-            kubectl create secret docker-registry ghcr-pull-secret \
+          kubectl delete secret ghcr-pull-secret --namespace staging --ignore-not-found
+          
+          kubectl create secret docker-registry ghcr-pull-secret \
             --docker-server=ghcr.io \
             --docker-username=${{ github.actor }} \
-            --docker-password=${{ secrets.GHCR_PAT }} \
-            --namespace staging \
-            --dry-run=client -o yaml | kubectl apply -f -
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --namespace staging
 
-              - name: Update Kubernetes manifests and Deploy
-              run: |
-                # 1. Converte l'IMAGE_NAME in tutto minuscolo per ghcr.io
-                LOWERCASE_IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-                
-                # 2. Applica i file originali dal repo (che hanno 'image: landing-app:local' o simili)
-                kubectl apply -f k8s/deployment.yml -n staging
-                
-                # 3. Usa il comando nativo K8s per aggiornare l'immagine in tempo reale!
-                kubectl set image deployment/landing-app landing-app=${LOWERCASE_IMAGE}:latest -n staging
-                
-                # 4. Aspetta che il pod con la nuova immagine sia pronto
-                kubectl rollout status deployment/landing-app -n staging --timeout=3m
-
-      - name: Show app URL
+      - name: Update and Deploy
         run: |
-          echo "✅ Deploy completato con successo!"
+          LOWERCASE_IMAGE=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          
+          # Applica i manifesti YAML
+          kubectl apply -f k8s/deployment.yml -n staging
+          kubectl apply -f k8s/service.yml -n staging
+          
+          # Imposta la nuova immagine
+          kubectl set image deployment/landing-app landing-app=${LOWERCASE_IMAGE}:latest -n staging
+          
+          # Forza il riavvio per prendere l'immagine 'latest' più recente
+          kubectl rollout restart deployment/landing-app -n staging
+          
+          # Attendi che sia pronto
+          kubectl rollout status deployment/landing-app -n staging --timeout=3m
+
+      - name: Show App URL
+        run: |
           NODE_PORT=$(kubectl get svc landing-app -n staging -o jsonpath='{.spec.ports[0].nodePort}')
           TAILSCALE_IP=$(echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d | grep server | awk -F/ '{print $3}' | cut -d: -f1)
+          
+          echo "✅ Deploy completato con successo!"
           echo "🌐 La tua Landing Page è visibile qui: http://${TAILSCALE_IP}:${NODE_PORT}"
